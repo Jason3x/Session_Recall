@@ -1,5 +1,5 @@
 🎮 Session Recall for R36S
-A Bash script to quickly relaunch saved games on your R36S system, integrating with RetroArch and RetroArch32.
+   A Bash script to quickly relaunch saved games on your R36S system, integrating with RetroArch and RetroArch32.
 
 🚀 Features
 - Detects recent save files across multiple ROM directories.
@@ -9,10 +9,10 @@ A Bash script to quickly relaunch saved games on your R36S system, integrating w
 - Launch the game from the save file 
 
 🛠️ Installation
-Copy the Session_Recall script to roms/tools or to roms2/tools if you have 2 SD cards
+   Copy the Session_Recall script to roms/tools or to roms2/tools if you have 2 SD cards
 
 ⚠️ Important Notes
-Testing: Only tested on emulators defined by default in RetroArch or RetroArch32. Compatibility with other setups is not guaranteed.
+   Testing: Only tested on emulators defined by default in RetroArch or RetroArch32. Compatibility with other setups is not guaranteed.
 
 📄 License
-MIT License – see License for details.
+   MIT License – see License for details.
