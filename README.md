@@ -17,5 +17,5 @@ Testing: Only tested on emulators defined by default in RetroArch or RetroArch32
 📄 License
 MIT License – see License for details.
 
-#A coffee to offer?
+# A coffee to offer?
 https://ko-fi.com/jason3x
