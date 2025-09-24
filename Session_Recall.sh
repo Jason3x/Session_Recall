@@ -49,12 +49,98 @@ CORES_DIR=("/home/ark/.config/retroarch/cores" "/home/ark/.config/retroarch32/co
 DEBUG_MODE=1
 DEBUG_FILE="/tmp/Session_Recall_debug.log"
 
-declare -A FALLBACK_CORES=(
-    [snes]="snes9x_libretro.so" [nes]="nestopia_libretro.so" [gba]="mgba_libretro.so"
-    [gb]="gambatte_libretro.so" [gbc]="gambatte_libretro.so" [n64]="mupen64plus_next_libretro.so"
-    [psx]="pcsx_rearmed_libretro.so" [psp]="ppsspp_libretro.so" [megadrive]="genesis_plus_gx_libretro.so"
-    [md]="genesis_plus_gx_libretro.so" [sega32x]="picodrive_libretro.so" [sega]="genesis_plus_gx_libretro.so"
-)
+# --- Génération automatique des FALLBACK_CORES (classé par système) ---
+declare -A FALLBACK_CORES
+
+generate_fallback_cores() {
+    for dir in "${CORES_DIR[@]}"; do
+        [ -d "$dir" ] || continue
+        for core in "$dir"/*.so; do
+            [ -f "$core" ] || continue
+            core_file=$(basename "$core")
+
+            case "$core_file" in
+                # --- Nintendo ---
+                nestopia_libretro.so)          FALLBACK_CORES[nes]="$core_file"; FALLBACK_CORES[fds]="$core_file";;
+                snes9x_libretro.so)            FALLBACK_CORES[snes]="$core_file"; FALLBACK_CORES[sfc]="$core_file";;
+                mgba_libretro.so)              FALLBACK_CORES[gba]="$core_file";;
+                gambatte_libretro.so)          FALLBACK_CORES[gb]="$core_file"; FALLBACK_CORES[gbc]="$core_file";;
+                mupen64plus_next_libretro.so)  FALLBACK_CORES[n64]="$core_file";;
+                desmume_libretro.so)           FALLBACK_CORES[nds]="$core_file";;
+                dolphin_libretro.so)           FALLBACK_CORES[gamecube]="$core_file"; FALLBACK_CORES[wii]="$core_file";;
+
+                # --- Sega ---
+                genesis_plus_gx_libretro.so)   FALLBACK_CORES[megadrive]="$core_file"; FALLBACK_CORES[gen]="$core_file"; FALLBACK_CORES[md]="$core_file"; FALLBACK_CORES[sms]="$core_file"; FALLBACK_CORES[gg]="$core_file";;
+                picodrive_libretro.so)         FALLBACK_CORES[sega32x]="$core_file";;
+                flycast_libretro.so)           FALLBACK_CORES[dreamcast]="$core_file"; FALLBACK_CORES[naomi]="$core_file"; FALLBACK_CORES[atomiswave]="$core_file";;
+                yabause_libretro.so)           FALLBACK_CORES[saturn]="$core_file";;
+
+                # --- Sony ---
+                pcsx_rearmed_libretro.so)      FALLBACK_CORES[psx]="$core_file";;
+                ppsspp_libretro.so)            FALLBACK_CORES[psp]="$core_file";;
+
+                # --- Arcade ---
+                fbneo_libretro.so)             FALLBACK_CORES[arcade]="$core_file"; FALLBACK_CORES[fbneo]="$core_file"; FALLBACK_CORES[fba]="$core_file"; FALLBACK_CORES[neogeo]="$core_file";;
+                mame2003_plus_libretro.so)     FALLBACK_CORES[mame]="$core_file";;
+
+                # --- Ordinateurs ---
+                dosbox_pure_libretro.so)       FALLBACK_CORES[dos]="$core_file"; FALLBACK_CORES[msdos]="$core_file";;
+                puae_libretro.so)              FALLBACK_CORES[amiga]="$core_file";;
+                vice_x64_libretro.so)          FALLBACK_CORES[c64]="$core_file";;
+                bluemsx_libretro.so)           FALLBACK_CORES[msx]="$core_file"; FALLBACK_CORES[coleco]="$core_file";;
+                atari800_libretro.so)          FALLBACK_CORES[atari800]="$core_file"; FALLBACK_CORES[atari5200]="$core_file";;
+                stella_libretro.so)            FALLBACK_CORES[atari2600]="$core_file";;
+                prosystem_libretro.so)         FALLBACK_CORES[atari7800]="$core_file";;
+                hatari_libretro.so)            FALLBACK_CORES[atarist]="$core_file";;
+
+                # --- NEC / Autres consoles ---
+                mednafen_pce_fast_libretro.so) FALLBACK_CORES[pcengine]="$core_file"; FALLBACK_CORES[pce]="$core_file"; FALLBACK_CORES[tg16]="$core_file";;
+                mednafen_wswan_libretro.so)    FALLBACK_CORES[wonderswan]="$core_file"; FALLBACK_CORES[ws]="$core_file"; FALLBACK_CORES[wsc]="$core_file";;
+                handy_libretro.so)             FALLBACK_CORES[lynx]="$core_file";;
+                mednafen_ngp_libretro.so)      FALLBACK_CORES[ngp]="$core_file"; FALLBACK_CORES[ngpc]="$core_file";;
+                vecx_libretro.so)              FALLBACK_CORES[vectrex]="$core_file";;
+                81_libretro.so)                FALLBACK_CORES[zx81]="$core_file";;
+                fuse_libretro.so)              FALLBACK_CORES[zxspectrum]="$core_file";;
+            esac
+        done
+    done
+}
+
+# Exécution dès l’initialisation
+generate_fallback_cores
+
+# --- Log regroupé par familles ---
+{
+    echo "=== NINTENDO ==="
+    for sys in nes fds snes sfc gba gb gbc n64 nds 3ds gamecube wii switch; do
+        [[ -n "${FALLBACK_CORES[$sys]}" ]] && echo "  [$sys] -> ${FALLBACK_CORES[$sys]}"
+    done
+
+    echo "=== SEGA ==="
+    for sys in megadrive gen md sms gg sega32x dreamcast naomi atomiswave saturn; do
+        [[ -n "${FALLBACK_CORES[$sys]}" ]] && echo "  [$sys] -> ${FALLBACK_CORES[$sys]}"
+    done
+
+    echo "=== SONY ==="
+    for sys in psx psp ps2; do
+        [[ -n "${FALLBACK_CORES[$sys]}" ]] && echo "  [$sys] -> ${FALLBACK_CORES[$sys]}"
+    done
+
+    echo "=== ARCADE ==="
+    for sys in arcade fbneo fba neogeo mame; do
+        [[ -n "${FALLBACK_CORES[$sys]}" ]] && echo "  [$sys] -> ${FALLBACK_CORES[$sys]}"
+    done
+
+    echo "=== ORDINATEURS ==="
+    for sys in dos msdos amiga c64 msx coleco atari800 atari5200 atari2600 atari7800 atarist; do
+        [[ -n "${FALLBACK_CORES[$sys]}" ]] && echo "  [$sys] -> ${FALLBACK_CORES[$sys]}"
+    done
+
+    echo "=== NEC & AUTRES ==="
+    for sys in pcengine pce tg16 wonderswan ws wsc lynx ngp ngpc vectrex zx81 zxspectrum; do
+        [[ -n "${FALLBACK_CORES[$sys]}" ]] && echo "  [$sys] -> ${FALLBACK_CORES[$sys]}"
+    done
+} >> "$DEBUG_FILE"
 
 # --- ExitMenu ---
 ExitMenu() {
@@ -65,7 +151,6 @@ ExitMenu() {
     fi
     exit 0
 }
-
 
 # --- Log_debug ---
 log_debug() {
