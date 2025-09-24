@@ -201,20 +201,54 @@ find_rom_path() {
 # --- Extrait le core et la commande ---
 get_core_and_command() {
     local system="$1" core="" command=""
-    if [ ! -f "$ES_SYSTEMS_CFG" ]; then echo "|"; return; fi
-    local system_block=$(sed -n "/<name>$system<\/name>/,/<\/system>/p" "$ES_SYSTEMS_CFG")
+    
+    # Si le fichier es_systems.cfg n'existe pas, on retourne fallback direct
+    [ ! -f "$ES_SYSTEMS_CFG" ] && { core="${FALLBACK_CORES[$system]}"; command="/usr/local/bin/retroarch -L \"$core\" \"%ROM%\""; echo "$core|$command"; return; }
+
+    # Lecture du bloc système
+    local system_block
+    system_block=$(sed -n "/<name>$system<\/name>/,/<\/system>/p" "$ES_SYSTEMS_CFG")
     if [ -n "$system_block" ]; then
-        local single_line_block=$(echo "$system_block" | tr -d '\n\r' | sed 's/>\s*</></g')
-        local raw_command=$(echo "$single_line_block" | sed -n 's:.*<command>\(.*\)</command>.*:\1:p')
+        # Extraire le core
         core=$(echo "$system_block" | grep '<core>' | head -n1 | sed -e 's/.*<core>//' -e 's/<\/core>.*//' | xargs)
-        local emulator=$(echo "$system_block" | grep '<emulator name' | head -n1 | sed -n 's/.*name="\([^"]*\)".*/\1/p' | xargs); [ -z "$emulator" ] && emulator="retroarch"
+        # Extraire l'émulateur
+        local emulator
+        emulator=$(echo "$system_block" | grep '<emulator name' | head -n1 | sed -n 's/.*name="\([^"]*\)".*/\1/p' | xargs)
+        [ -z "$emulator" ] && emulator="retroarch"
+        # Extraire la commande
+        local raw_command
+        raw_command=$(echo "$system_block" | tr -d '\n\r' | sed 's/>\s*</></g' | sed -n 's:.*<command>\(.*\)</command>.*:\1:p')
         if [ -n "$raw_command" ]; then
             command=$(echo "$raw_command" | grep -o -E '[^;]*%EMULATOR%[^;]*' || echo "$raw_command" | sed -E 's/(sudo perfmax .*?;|; sudo perfnorm)//g')
             command=$(echo "$command" | xargs | sed -E 's/^\s*nice -n -[0-9]+\s*//' | xargs)
-            command="${command//\%EMULATOR%/$emulator}"; command="${command//\%CORE%/$core}"
+            command="${command//\%EMULATOR%/$emulator}"
+            command="${command//\%CORE%/$core}"
         fi
     fi
-    log_debug "[GET_CORE] System: '$system' -> Core: '$core' -> Command: '$command'"; echo "$core|$command"
+
+    # Vérifie si le core existe, sinon fallback
+    local found_core=""
+    if [[ -n "$core" ]]; then
+        for dir in "${CORES_DIR[@]}"; do
+            [[ -f "$dir/$core" ]] && { found_core="$dir/$core"; break; }
+        done
+    fi
+
+    if [[ -z "$found_core" ]]; then
+        core="${FALLBACK_CORES[$system]}"
+        for dir in "${CORES_DIR[@]}"; do
+            [[ -f "$dir/$core" ]] && { found_core="$dir/$core"; break; }
+        done
+        # Choix du binaire RetroArch selon dossier
+        if [[ "$found_core" == *retroarch32* ]]; then
+            command="/usr/local/bin/retroarch32 -L \"$found_core\" \"%ROM%\""
+        else
+            command="/usr/local/bin/retroarch -L \"$found_core\" \"%ROM%\""
+        fi
+        log_debug "Fallback core used for $system: $core from $found_core"
+    fi
+
+    echo "$core|$command"
 }
 
 # --- Prépare et lance le jeu ---
@@ -227,15 +261,17 @@ launch_game() {
     system=$(detect_system "$save_path" | tr '[:upper:]' '[:lower:]')
     log_debug "Processing save: $save_filename, System: $system"
 
+    # Trouve la ROM correspondante
     rom_path=$(find_rom_path "$save_basename" "$system")
     if [ -z "$rom_path" ]; then
         show_dialog msgbox "ROM Not Found" "\nNo ROM for:\n\n$save_filename"
         return 0
     fi
 
+    # Récupère core et commande depuis es_systems.cfg
     IFS='|' read -r core_name launch_cmd <<< "$(get_core_and_command "$system")"
 
-    # --- Vérifie si le savestate a un core spécifique ---
+    # Vérifie si le savestate a un core spécifique
     detect_state_core() {
         local save_path="$1"
         local meta_file="${save_path}.meta"
@@ -243,6 +279,7 @@ launch_game() {
     }
 
     state_core=$(detect_state_core "$save_path")
+
     if [[ -n "$state_core" ]]; then
         found_core=""
         for dir in "${CORES_DIR[@]}"; do
@@ -253,53 +290,67 @@ launch_game() {
         done
         if [[ -n "$found_core" ]]; then
             core_name="$state_core"
-            launch_cmd="/usr/local/bin/retroarch -L \"$found_core\" \"%ROM%\""
+            if [[ "$found_core" == *retroarch32* ]]; then
+                launch_cmd="/usr/local/bin/retroarch32 -L \"$found_core\" \"%ROM%\""
+            else
+                launch_cmd="/usr/local/bin/retroarch -L \"$found_core\" \"%ROM%\""
+            fi
             log_debug "Using core from savestate: $core_name"
         else
-            log_debug "Core specified in savestate not found: $state_core. Using fallback."
+            log_debug "Core in savestate not found: $state_core. Will try fallback."
+            core_name=""
         fi
     fi
 
-    # --- Prépare la commande avec le chemin de la ROM ---
+    # Si aucun core trouvé, utilise le fallback
+    if [[ -z "$core_name" || ! -f "$found_core" ]]; then
+        fallback_core="${FALLBACK_CORES[$system]}"
+        if [[ -n "$fallback_core" ]]; then
+            for dir in "${CORES_DIR[@]}"; do
+                if [[ -f "$dir/$fallback_core" ]]; then
+                    core_name="$fallback_core"
+                    found_core="$dir/$fallback_core"
+                    if [[ "$dir" == *retroarch32* ]]; then
+                        launch_cmd="/usr/local/bin/retroarch32 -L \"$found_core\" \"%ROM%\""
+                    else
+                        launch_cmd="/usr/local/bin/retroarch -L \"$found_core\" \"%ROM%\""
+                    fi
+                    log_debug "Using fallback core for $system: $core_name from $dir"
+                    break
+                fi
+            done
+        else
+            log_debug "No fallback core available for $system. Launching without core."
+            launch_cmd="/usr/local/bin/retroarch \"%ROM%\""
+        fi
+    fi
+
+    # Prépare le chemin de la ROM
     safe_rom_path="\"$rom_path\""
     launch_cmd="${launch_cmd//\%ROM%/$safe_rom_path}"
 
-    # --- Gestion des savestates avec transformation temporaire en .state.auto ---
-if [[ "$save_filename" =~ \.state.*$ ]]; then
-    local temp_cfg_file="/tmp/retroarch_load_state.cfg"
-    local save_dir=$(dirname "$save_path")
-    local auto_save_path="${save_dir}/${save_basename}.state.auto"
-
-    # Sauvegarde l'existant si nécessaire
-    local auto_backup=""
-    if [[ -f "$auto_save_path" ]]; then
-        auto_backup="${auto_save_path}.bak"
-        mv -f "$auto_save_path" "$auto_backup"
-        log_debug "Existing .state.auto backed up to $auto_backup"
+    # Gestion des savestates .state.auto
+    if [[ "$save_filename" =~ \.state.*$ ]]; then
+        local temp_cfg_file="/tmp/retroarch_load_state.cfg"
+        local save_dir=$(dirname "$save_path")
+        local auto_save_path="${save_dir}/${save_basename}.state.auto"
+        local auto_backup=""
+        [[ -f "$auto_save_path" ]] && { auto_backup="${auto_save_path}.bak"; mv -f "$auto_save_path" "$auto_backup"; log_debug "Backup .state.auto -> $auto_backup"; }
+        cp -f "$save_path" "$auto_save_path"
+        log_debug "Created temporary .state.auto: $auto_save_path"
+        echo "savestate_directory = \"$save_dir\"" > "$temp_cfg_file"
+        echo "savestate_auto_load = \"true\"" >> "$temp_cfg_file"
+        echo "savestate_path = \"$auto_save_path\"" >> "$temp_cfg_file"
+        launch_cmd+=" --appendconfig $temp_cfg_file"
+        trap 'rm -f "$auto_save_path"; [[ -n "$auto_backup" ]] && mv -f "$auto_backup" "$auto_save_path"' EXIT
     fi
-
-    # Copie temporaire pour chargement automatique
-    cp -f "$save_path" "$auto_save_path"
-    log_debug "Created temporary .state.auto: $auto_save_path"
-
-    # Prépare le fichier de config pour RetroArch
-    echo "savestate_directory = \"$save_dir\"" > "$temp_cfg_file"
-    echo "savestate_auto_load = \"true\"" >> "$temp_cfg_file"
-    echo "savestate_path = \"$auto_save_path\"" >> "$temp_cfg_file"
-
-    # Ajoute le fichier de config à la commande RetroArch
-    launch_cmd+=" --appendconfig $temp_cfg_file"
-
-    # --- Après le jeu, restauration ---
-    trap 'rm -f "$auto_save_path"; [[ -n "$auto_backup" ]] && mv -f "$auto_backup" "$auto_save_path"' EXIT
-fi
 
     log_debug "[PREPARED_CMD] ${launch_cmd}"
 
     local core_display="${core_name:-N/A}"
     [[ -n "$found_core" ]] && core_display="$(basename "$found_core")"
 
-        # --- Affichage de la barre de lancement ---
+    # Barre de lancement
     (
         for i in {1..100}; do
             echo $i
@@ -308,15 +359,15 @@ fi
     ) | dialog --backtitle "$BACKTITLE" \
         --title "Launching game" \
         --gauge "\n$(basename "$rom_path")\nSystem: $system\nCore: $core_display" 10 60 0
-    
+
     log_debug "Stopping gptokeyb before launching the game..."
     pkill -f "gptokeyb -1 Session_Recall.sh" || true
     sleep 0.2 
 
-    # --- Lancement via systemd-run ---
+    # Lancement via systemd-run
     systemd-run --scope --unit="session-recall-worker" "$0" --launch "$launch_cmd"
     log_debug "Worker launched via systemd-run."
-    
+
     ExitMenu
 }
 
