@@ -67,7 +67,6 @@ generate_fallback_cores() {
                 gambatte_libretro.so)          FALLBACK_CORES[gb]="$core_file"; FALLBACK_CORES[gbc]="$core_file";;
                 mupen64plus_next_libretro.so)  FALLBACK_CORES[n64]="$core_file";;
                 desmume_libretro.so)           FALLBACK_CORES[nds]="$core_file";;
-                dolphin_libretro.so)           FALLBACK_CORES[gamecube]="$core_file"; FALLBACK_CORES[wii]="$core_file";;
 
                 # --- Sega ---
                 genesis_plus_gx_libretro.so)   FALLBACK_CORES[megadrive]="$core_file"; FALLBACK_CORES[gen]="$core_file"; FALLBACK_CORES[md]="$core_file"; FALLBACK_CORES[sms]="$core_file"; FALLBACK_CORES[gg]="$core_file";;
