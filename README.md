@@ -1,4 +1,4 @@
-🎮 Session Recall for R36S
+🎮 # Session Recall for R36S
 A Bash script to quickly relaunch saved games on your R36S system, integrating with RetroArch and RetroArch32.
 
 🚀 Features
