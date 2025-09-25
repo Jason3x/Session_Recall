@@ -13,6 +13,13 @@ Copy the Session_Recall script to roms/tools or to roms2/tools if you have 2 SD 
 
 ⚠️ Important Notes
 Testing: Only tested on emulators defined by default in RetroArch or RetroArch32. Compatibility with other setups is not guaranteed.
+Fixed.
+
+[MANE Constraint] 
+Resolved an issue preventing the backup process from being launched immediately.
+The core must now be fully loaded before the backup procedure can be executed.
+
+Nintendo DS is not supported by this script since it relies on the Drastic core, which is currently incompatible.
 
 📄 License
 MIT License – see License for details.
