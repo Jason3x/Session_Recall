@@ -141,13 +141,38 @@ show_dialog() {
 
 # --- Detection du systeme ---
 detect_system() {
-    local save_path="$1" system="Unknown"
+    local save_path="$1"
+    local system="Unknown"
+
+    # Normalise le chemin
+    save_path=$(readlink -f "$save_path" 2>/dev/null || printf '%s\n' "$save_path")
+
     for roms_dir in "${ROMS_DIRS[@]}"; do
-        if [[ "$save_path" == "$roms_dir"* ]]; then
-            local relative_path="${save_path#$roms_dir/}"; system="${relative_path%%/*}"; break
-        fi
+        # normalise aussi roms_dir
+        roms_dir=$(readlink -f "$roms_dir" 2>/dev/null || printf '%s\n' "$roms_dir")
+        case "$save_path" in
+            "$roms_dir"/*)
+                local relative_path="${save_path#$roms_dir/}"
+                system="${relative_path%%/*}"
+                break
+                ;;
+        esac
     done
-    log_debug "[DETECTED] $save_path -> $system"; echo "$system"
+
+    if [[ "$system" == "Unknown" ]]; then
+
+        for roms_dir in "${ROMS_DIRS[@]}"; do
+            roms_dir=$(readlink -f "$roms_dir" 2>/dev/null || printf '%s\n' "$roms_dir")
+            if [[ "$save_path" == "$roms_dir"* ]]; then
+                local rel="${save_path#$roms_dir/}"
+                system="${rel%%/*}"
+                break
+            fi
+        done
+    fi
+
+    log_debug "[DETECTED] save_path='$save_path' -> system='$system'"
+    echo "$system"
 }
 
 # --- Trouve le chemin complet de la ROM correspondante à une sauvegarde ---
