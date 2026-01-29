@@ -3,6 +3,7 @@
 #----------------------------------#
 #     Session Recall for R36S      #
 #             By Jason             #
+#              v2.0                #
 #----------------------------------#
 
 # --- SECTION "WORKER" ---
@@ -42,7 +43,7 @@ fi
 
 # --- VARIABLES & CONSTANTES ---
 CURR_TTY="/dev/tty1"
-BACKTITLE="Session Recall By Jason"
+BACKTITLE="Session Recall v2.0 By Jason"
 ROMS_DIRS=("/roms" "/roms2")
 ES_SYSTEMS_CFG="/etc/emulationstation/es_systems.cfg"
 CORES_DIR=("/home/ark/.config/retroarch/cores" "/home/ark/.config/retroarch32/cores")
@@ -127,7 +128,6 @@ ExitMenu() {
     fi
     exit 0
 }
-
 
 # --- Log_debug ---
 log_debug() {
@@ -245,6 +245,64 @@ get_core_and_command() {
 
     log_debug "[GET_CORE] System: '$system' -> Core: '$core' -> Command: '$command'"
     echo "$core|$command"
+}
+
+# --- Sauvegarde de toutes les saves au format zip ---
+backup_all_to_zip() {
+    # On choisit le chemin de destination 
+    local final_zip=""
+    if [ -d "/roms2/tools" ]; then final_zip="/roms2/tools/Session_Recall.zip"
+    elif [ -d "/roms/tools" ]; then final_zip="/roms/tools/Session_Recall.zip"
+    else
+        mkdir -p "/roms/tools"
+        final_zip="/roms/tools/Session_Recall.zip"
+    fi
+
+    dialog --backtitle "$BACKTITLE" --title "Backup ZIP" --infobox "\nScanning and compressing all saves...\nDestination: $final_zip\nPlease wait." 7 60 2>"$CURR_TTY"
+    
+    local files_to_zip=()
+    # On cherche dans toutes les directions définies dans ROMS_DIRS
+    mapfile -d '' files_to_zip < <(find "${ROMS_DIRS[@]}" -type f \( -iname "*.srm" -o -iname "*.sav" -o -iname "*.state*" \) -print0 2>/dev/null)
+
+    if [ ${#files_to_zip[@]} -eq 0 ]; then
+        show_dialog msgbox "Backup Error" "No save files found to backup."
+        return
+    fi
+
+    # Création du ZIP
+    if printf "%s\n" "${files_to_zip[@]}" | zip -@ "$final_zip" > /dev/null 2>&1; then
+        show_dialog msgbox "Backup Complete" "All saves (SRM, SAV, STATE) have been backed up to:\n\n$final_zip"
+    else
+        show_dialog msgbox "Error" "An error occurred while creating the ZIP file.\nCheck if the SD card is full or read-only."
+    fi
+}
+
+# --- Restauration du backup ---
+restore_all_from_zip() {
+    local zip_found=""
+    # On cherche où se trouve le fichier zip parmi les emplacements possibles
+    for path in "/roms/tools/Session_Recall.zip" "/roms2/tools/Session_Recall.zip"; do
+        if [ -f "$path" ]; then
+            zip_found="$path"
+            break
+        fi
+    done
+
+    if [ -z "$zip_found" ]; then
+        show_dialog msgbox "Restore Error" "The file Session_Recall.zip was not found in:\n- /roms/tools/\n- /roms2/tools/"
+        return
+    fi
+
+    if dialog --backtitle "$BACKTITLE" --title "Restore Confirmation" --yesno "\nBackup found: $zip_found\n\nDo you want to restore all saves?\n\nWARNING: This will overwrite existing saves with the versions from the backup!" 12 65 2>"$CURR_TTY"; then
+        dialog --backtitle "$BACKTITLE" --title "Restoration" --infobox "\nExtracting files to original locations...\nPlease wait." 5 50 2>"$CURR_TTY"
+        
+        # Extraction
+        if unzip -o "$zip_found" -d / > /dev/null 2>&1; then
+            show_dialog msgbox "Restore Complete" "All saves have been restored successfully to their respective folders."
+        else
+            show_dialog msgbox "Error" "An error occurred during extraction.\nThe ZIP file might be corrupted."
+        fi
+    fi
 }
 
 # --- Prépare et lance le jeu ---
@@ -388,7 +446,8 @@ launch_cmd+=" --appendconfig $temp_cfg_file"
     
     ExitMenu
 }
-# --- Sous-Menu ---
+
+# --- Sous-Menu d'action ---
 show_action_menu() {
     local selected_path="$1"
     
@@ -459,13 +518,26 @@ main_loop() {
             menu_options+=("$i" "$filename - $formatted_date ($save_type_display / \\Z4$system_detected\\Zn)")
             save_paths+=("$filepath"); ((i++))
         done
+        
+menu_options+=("" "")
+        
+        # sauvegarde et restauration en bas 
+        menu_options+=("B" "Backup all saves zip")
+        menu_options+=("R" "Restore all saves")
 
         local CHOICE
         CHOICE=$(dialog --colors --output-fd 1 --backtitle "$BACKTITLE" --begin 3 0 --title "Recent Saves" \
-            --ok-label "Select" --cancel-label "Quit" --menu "\n10 most recent saves" 17 70 12 "${menu_options[@]}" 2>"$CURR_TTY")
+            --ok-label "Select" --cancel-label "Quit" --menu "\n10 most recent saves & Tools" 18 75 12 "${menu_options[@]}" 2>"$CURR_TTY")
         
-        ([ $? -ne 0 ] || [ -z "${CHOICE:-}" ]) && ExitMenu
-        show_action_menu "${save_paths[$((CHOICE-1))]}"
+        [ $? -ne 0 ] && ExitMenu
+        
+        if [[ "$CHOICE" == "B" ]]; then
+            backup_all_to_zip
+        elif [[ "$CHOICE" == "R" ]]; then
+            restore_all_from_zip
+        else
+            show_action_menu "${save_paths[$((CHOICE-1))]}"
+        fi
     done
 }
 
@@ -479,7 +551,7 @@ else
     setfont /usr/share/consolefonts/Lat7-Terminus16.psf.gz
 fi
 pkill -9 -f gptokeyb || true; pkill -9 -f osk.py || true
-printf "\033c" > "$CURR_TTY"; printf "Starting Session Recall...\nPlease wait." > "$CURR_TTY"; sleep 2
+printf "\033c" > "$CURR_TTY"; printf "Starting Session Recall v2.0\nPlease wait..." > "$CURR_TTY"; sleep 2
 
 # Lancement de gptokeyb pour le contrôle à la manette
 if command -v /opt/inttools/gptokeyb &> /dev/null; then
