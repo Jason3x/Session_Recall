@@ -251,11 +251,11 @@ get_core_and_command() {
 backup_all_to_zip() {
     # On choisit le chemin de destination 
     local final_zip=""
-    if [ -d "/roms2/tools" ]; then final_zip="/roms2/tools/Session_Recall.zip"
-    elif [ -d "/roms/tools" ]; then final_zip="/roms/tools/Session_Recall.zip"
+    if [ -d "/roms2/backup" ]; then final_zip="/roms2/backup/Session_Recall.zip"
+    elif [ -d "/roms/backup" ]; then final_zip="/roms/backup/Session_Recall.zip"
     else
-        mkdir -p "/roms/tools"
-        final_zip="/roms/tools/Session_Recall.zip"
+        mkdir -p "/roms/backup"
+        final_zip="/roms/backup/Session_Recall.zip"
     fi
 
     dialog --backtitle "$BACKTITLE" --title "Backup ZIP" --infobox "\nScanning and compressing all saves...\nDestination: $final_zip\nPlease wait." 7 60 2>"$CURR_TTY"
@@ -281,7 +281,7 @@ backup_all_to_zip() {
 restore_all_from_zip() {
     local zip_found=""
     # On cherche où se trouve le fichier zip parmi les emplacements possibles
-    for path in "/roms/tools/Session_Recall.zip" "/roms2/tools/Session_Recall.zip"; do
+    for path in "/roms/backup/Session_Recall.zip" "/roms2/backup/Session_Recall.zip"; do
         if [ -f "$path" ]; then
             zip_found="$path"
             break
@@ -289,7 +289,7 @@ restore_all_from_zip() {
     done
 
     if [ -z "$zip_found" ]; then
-        show_dialog msgbox "Restore Error" "The file Session_Recall.zip was not found in:\n- /roms/tools/\n- /roms2/tools/"
+        show_dialog msgbox "Restore Error" "The file Session_Recall.zip was not found in:\n- /roms/backup/\n- /roms2/backup/"
         return
     fi
 
